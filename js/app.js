@@ -29,6 +29,9 @@ var App = (function() {
   function App(config) {
     var defaults = {
       el: '#app',
+      here: "trilobites",
+      hereColor: "#9a3044",
+      mediaArrays: {},
       data: {},
       zoomDuration: 2000,
       packPadding: 12,
@@ -36,6 +39,21 @@ var App = (function() {
     };
     this.opt = _.extend({}, defaults, queryParams(), config);
     this.init();
+  }
+
+  function addHere(node, mediaArray){
+    node.isLeaf = true;
+
+    var value = node.value;
+    var hereValue = Math.round(value / 500);
+    var diffValue = value - hereValue;
+
+    node.children = [
+      {"name": "You are here", "value": hereValue, "isHere": true, "fillColor": "url(#"+mediaArray.id+")"},
+      {"value": diffValue, "isHidden": true}
+    ]
+
+    return node;
   }
 
   function queryParams(){
@@ -52,15 +70,15 @@ var App = (function() {
   }
 
   App.prototype.init = function(){
-    var _this = this;
+    this.loadHere();
+    console.log(this.opt.data);
     var data = this.loadData(this.opt.data)
-
     console.log('Loaded data', data);
-
-    this.loadMap(data);
+    this.loadDataCircles(data);
   };
 
   App.prototype.loadData = function(data){
+
     data.children = _.map(data.children, function(dept){
       var subdivisions = dept.children;
       // generate random numbers for this amount of children
@@ -121,14 +139,14 @@ var App = (function() {
 
   };
 
-  App.prototype.loadMap = function(data){
+  App.prototype.loadDataCircles = function(data){
     var _this = this;
     var $el = $(this.opt.el);
-    var $dashboard = $('#dashboard');
     var width = $el.width();
     var height = $el.height();
     var view;
     var startingDepth = 1;
+    var hereColor = this.opt.hereColor;
 
     var svg = d3.create("svg")
         .attr("viewBox", `-${width / 2} -${height / 2} ${width} ${height}`)
@@ -137,13 +155,15 @@ var App = (function() {
         .style("cursor", "pointer");
 
     var filterDef = svg.append("defs");
+
+    // load media array image
     var pattern = filterDef.append("pattern")
-                  .attr("id", "panel")
+                  .attr("id", this.here.id)
                   .attr("patternContentUnits", "objectBoundingBox")
                   .attr("width", "100%")
                   .attr("height", "100%");
     pattern.append("image")
-          .attr("xlink:href", "img/Trilobite_Layout_01.jpg")
+          .attr("xlink:href", this.here.image)
           .attr("preserveAspectRatio", "none")
           .attr("width", "1")
           .attr("height", "1");
@@ -204,9 +224,11 @@ var App = (function() {
         // .style("fill-opacity", d => d.data.isHidden ? 0 : 1)
         .style("fill-opacity", function(d){
           if (d.data.isHidden) return 0;
-          else if (d.depth===1) return 1;
-          else if (d.depth>=3) return 0.5;
-          else return 0.667;
+          else return 1;
+        })
+        .style("stroke", function(d){
+          if (d.data.isHere) return hereColor;
+          else return 'none';
         })
         .on("mouseover", function(e, d) {
           d3.select(this).attr("stroke", "#000");
@@ -227,7 +249,7 @@ var App = (function() {
       .data(root.descendants())
       .join("text")
         .attr("fill", function(d){
-          if (d.data.isHere) return "#9a3044";
+          if (d.data.isHere) return hereColor;
           // else if (d.depth===1) return "#3d6a64";
           else return "black";
         })
@@ -289,12 +311,6 @@ var App = (function() {
           .on("start", function(d) { if (isLabelVisible(d)) this.style.display = "inline"; })
           .on("end", function(d) { if (!isLabelVisible(d)) this.style.display = "none"; });
       node.attr("pointer-events", d => isNodeValid(d) ? null : "none")
-
-      // if (!toNode.children || toNode.data.isLeaf) {
-      //   $dashboard.addClass('active');
-      // } else {
-      //   $dashboard.removeClass('active');
-      // }
     }
 
     zoomTo([root.x, root.y, root.r * 2]);
@@ -323,84 +339,40 @@ var App = (function() {
 
   };
 
+  App.prototype.loadHere = function(){
+    var data = this.opt.data;
+    var hereKey = this.opt.here;
+    var mediaArrays = this.opt.mediaArrays;
+
+    if (!_.has(mediaArrays, hereKey)) {
+      alert('Could not find key '+hereKey+' in mediaArrays');
+      hereKey = _.first(_.keys(mediaArrays));
+    }
+
+    var mediaArray = mediaArrays[hereKey];
+    mediaArray.id = hereKey;
+    var parentKey = mediaArray.parent;
+
+    _.each(data.children, function(child, i){
+      if (child.name === parentKey && !_.has(child, 'children')) {
+        var updatedChild = addHere(child, mediaArray);
+        data.children[i] = updatedChild;
+      } else {
+        _.each(child.children, function(gchild, j){
+          if (gchild.name === parentKey && !_.has(gchild, 'children')) {
+            var updatedChild = addHere(gchild, mediaArray);
+            data.children[i].children[j] = updatedChild;
+          }
+        });
+      }
+    });
+
+    this.here = mediaArray;
+    this.opt.data = data;
+  };
+
   return App;
 
 })();
-
-
-
-
-var config = {
-  data: {
-    "name": "AMNH Collections",
-    "fillColor": "url(#dots)",
-    "children": [
-      {
-        "name": "Monell Cryo-Facility",
-        "value": 126219
-      },{
-        "name": "Earth and Planetary Sciences",
-        "children": [
-          {"name": "EPS/Mineralogy", "value": 126527},
-          {"name": "EPS/Meteorites", "value": 5294},
-          {"name": "Tektites", "value": 921},
-          {"name": "EPS/Mineral Deposits", "value": 13441},
-          {"name": "EPS/Petrology", "value": 24603},
-          {"name": "Astro/Observations", "value": 45, "unit": "TB"},
-          {"name": "Astro/Simulations", "value": 50, "unit": "TB"},
-          {"name": "Astro/Instruments", "value": 2}
-        ]
-      },{
-        "name": "Anthropology",
-        "children": [
-          {"name": "Archaeology", "value": 340641},
-          {"name": "Ethnology", "value": 169893},
-          {"name": "Biology", "value": 23009},
-          {"name": "Other (casts, molds)", "value": 7215}
-        ]
-      },{
-        "name": "Vertebrate Zoology",
-        "children": [
-          {"name": "Herpetology", "value": 376154},
-          {"name": "Ichthyology", "value": 3231638},
-          {"name": "Mammalogy", "value": 279812},
-          {"name": "Ornithology", "value": 890540}
-        ]
-      },{
-        "name": "Paleontology",
-        "children": [
-          {"name": "Fossil Amphibians, Reptiles and Birds", "value": 33231},
-          {"name": "Fossil Fish", "value": 28687},
-          {"name": "Fossil Invertebrates", "value": 5110000, "isLeaf": true, "children": [
-            {"name": "You are here", "value": 10000, "isHere": true, "fillColor": "url(#panel)"},
-            {"value": 1972780, "isHidden": true}
-          ]},
-          {"name": "Fossil Mammals", "value": 400000},
-          {"name": "Fossil Plants", "value": 440}
-        ]
-      },{
-        "name": "Invertebrate Zoology",
-        "children": [
-          {"name": "Amber", "value": 12744},
-          {"name": "Arachnida", "value": 1216768},
-          {"name": "Cnidaria", "value": 8826},
-          {"name": "Coleoptera", "value": 1982780},
-          {"name": "Crustacea", "value": 116500},
-          {"name": "Diptera", "value": 1138717},
-          {"name": "Hemiptera", "value": 976518},
-          {"name": "Hymenoptera", "value": 8724094},
-          {"name": "Isoptera", "value": 1000000},
-          {"name": "Lepidoptera", "value": 2263456},
-          {"name": "Minor Orders", "value": 824644},
-          {"name": "Misc. Bulk", "value": 33597},
-          {"name": "Mollusca", "value": 1606459},
-          {"name": "Myriapoda", "value": 79880},
-          {"name": "Other Invert Phyla", "value": 3399856},
-          {"name": "Protists", "value": 47895}
-        ]
-      }
-    ]
-  }
-};
 
 var app = new App(config);

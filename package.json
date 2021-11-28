@@ -1,0 +1,10 @@
+{
+  "name": "collections-core-zoom",
+  "description": "Zoom in and out of AMNH collections",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "devDependencies": {
+    "express": "^4.17.1"
+  }
+}
