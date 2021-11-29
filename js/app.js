@@ -69,6 +69,11 @@ var App = (function() {
     return v.toLocaleString();
   }
 
+  function toIdString(text){
+    text = ""+text;
+    return text.replace(/[\W]+/g,"_");
+  }
+
   App.prototype.init = function(){
     this.loadHere();
     console.log(this.opt.data);
@@ -79,32 +84,13 @@ var App = (function() {
 
   App.prototype.loadData = function(data){
 
+  var imagesToLoad = {};
+
     data.children = _.map(data.children, function(dept){
       var subdivisions = dept.children;
-      // generate random numbers for this amount of children
-      if (Number.isInteger(subdivisions)) {
-        var total = dept.value;
-        dept.children = _.times(subdivisions, function(n){
-          var minValue = Math.round(total / (subdivisions-n));
-          var maxValue = Math.round(total / 2);
-          if (minValue === total) {
-            maxValue = minValue;
-          }
-          else if (minValue > maxValue) {
-            var tmp = minValue;
-            minValue = maxValue;
-            maxValue = tmp;
-          }
-          var count = _.random(minValue, maxValue);
-          total -= count;
-          return {
-            "name": "Subdivision " + (n+1),
-            "value": count
-          }
-        });
 
       // created value (sum) for department
-      } else if (_.has(dept, 'children')) {
+      if (_.has(dept, 'children')) {
         var sum =  _.reduce(dept.children, function(memo, subdivision){ return memo + subdivision.value; }, 0);
         dept.value = sum;
       }
@@ -117,6 +103,11 @@ var App = (function() {
         dept.children = _.map(dept.children, function(subdivision){
           subdivision.formattedValue = formatNumber(subdivision.value);
           if (subdivision.unit) subdivision.formattedValue += " " + subdivision.unit;
+      if (subdivision.image) {
+        subdivision.imageId = toIdString(subdivision.image);
+        subdivision.fillColor = "url(#"+subdivision.imageId+")";
+        imagesToLoad[subdivision.imageId] = subdivision.image;
+      }
           return subdivision;
         })
       }
@@ -132,7 +123,8 @@ var App = (function() {
       "name": "root",
       "children": [
         data
-      ]
+      ],
+    "imagesToLoad": imagesToLoad
     }
 
     return data;
@@ -167,6 +159,20 @@ var App = (function() {
           .attr("preserveAspectRatio", "none")
           .attr("width", "1")
           .attr("height", "1");
+
+    // load images
+    _.each(data.imagesToLoad, function(imagePath, imageId){
+      var imagePattern = filterDef.append("pattern")
+                  .attr("id", imageId)
+                  .attr("patternContentUnits", "objectBoundingBox")
+                  .attr("width", "100%")
+                  .attr("height", "100%");
+      imagePattern.append("image")
+        .attr("xlink:href", imagePath)
+        .attr("preserveAspectRatio", "none")
+        .attr("width", "1")
+        .attr("height", "1");
+    });
 
     var dotRadius = 2;
     var dotMargin = 1;
