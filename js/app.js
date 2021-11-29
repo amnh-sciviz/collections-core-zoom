@@ -49,7 +49,7 @@ var App = (function() {
     var diffValue = value - hereValue;
 
     node.children = [
-      {"name": "You are here", "value": hereValue, "isHere": true, "fillColor": "url(#"+mediaArray.id+")"},
+      {"name": "You are here", "pathName": mediaArray.name, "value": hereValue, "isHere": true, "fillColor": "url(#"+mediaArray.id+")"},
       {"value": diffValue, "isHidden": true}
     ]
 
@@ -139,6 +139,7 @@ var App = (function() {
     var view;
     var startingDepth = 1;
     var hereColor = this.opt.hereColor;
+    var $pathContainer = $('#current-path');
 
     var svg = d3.create("svg")
         .attr("viewBox", `-${width / 2} -${height / 2} ${width} ${height}`)
@@ -244,7 +245,7 @@ var App = (function() {
           d3.select(this).attr("stroke", null);
         })
         .on("click", function(e, d){
-          isNodeValid(d) && (zoom(e, d), e.stopPropagation()) && renderNodePath(d);
+          isNodeValid(d) && (zoom(e, d), e.stopPropagation());
         });
 
     var label = svg.append("g")
@@ -302,6 +303,22 @@ var App = (function() {
       return d.parent === focus || d.data.isHere || d === focus && (!d.children || d.data.isLeaf) || d.depth===1 && d === focus;
     }
 
+    function renderNodePath(node) {
+      var nodePath = [];
+      var currentNode = node;
+      do {
+        var name = currentNode.data.pathName ? currentNode.data.pathName : currentNode.data.name;
+        nodePath.unshift(name);
+        if (currentNode.parent) currentNode = currentNode.parent;
+      } while(currentNode.parent);
+
+      var html = _.map(nodePath, function(name){
+        return '<div class="node">'+name+'</div>';
+      });
+      html = html.join('');
+      $pathContainer.html(html);
+    }
+
     function zoom(event, toNode) {
       focus = toNode;
       var transition = svg.transition()
@@ -317,15 +334,11 @@ var App = (function() {
           .on("start", function(d) { if (isLabelVisible(d)) this.style.display = "inline"; })
           .on("end", function(d) { if (!isLabelVisible(d)) this.style.display = "none"; });
       node.attr("pointer-events", d => isNodeValid(d) ? null : "none")
-    }
-
-    function renderNodePath(node) {
-
+      renderNodePath(toNode);
     }
 
     zoomTo([root.x, root.y, root.r * 2]);
     zoom({}, startingNode);
-    renderNodePath(startingNode);
 
     function loop(){
       var stepDur = _this.opt.zoomDuration + 1000;
