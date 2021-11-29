@@ -103,13 +103,13 @@ var App = (function() {
         dept.children = _.map(dept.children, function(subdivision){
           subdivision.formattedValue = formatNumber(subdivision.value);
           if (subdivision.unit) subdivision.formattedValue += " " + subdivision.unit;
-      if (subdivision.image) {
-        subdivision.imageId = toIdString(subdivision.image);
-        subdivision.fillColor = "url(#"+subdivision.imageId+")";
-        imagesToLoad[subdivision.imageId] = subdivision.image;
-      }
+          if (subdivision.image) {
+            subdivision.imageId = toIdString(subdivision.image);
+            subdivision.fillColor = "url(#"+subdivision.imageId+")";
+            imagesToLoad[subdivision.imageId] = subdivision.image;
+          }
           return subdivision;
-        })
+        });
       }
 
       // dept = _.omit(dept, 'value');
@@ -124,7 +124,7 @@ var App = (function() {
       "children": [
         data
       ],
-    "imagesToLoad": imagesToLoad
+      "imagesToLoad": imagesToLoad
     }
 
     return data;
@@ -244,7 +244,7 @@ var App = (function() {
           d3.select(this).attr("stroke", null);
         })
         .on("click", function(e, d){
-          isNodeValid(d) && (zoom(e, d), e.stopPropagation());
+          isNodeValid(d) && (zoom(e, d), e.stopPropagation()) && renderNodePath(d);
         });
 
     var label = svg.append("g")
@@ -319,8 +319,13 @@ var App = (function() {
       node.attr("pointer-events", d => isNodeValid(d) ? null : "none")
     }
 
+    function renderNodePath(node) {
+
+    }
+
     zoomTo([root.x, root.y, root.r * 2]);
     zoom({}, startingNode);
+    renderNodePath(startingNode);
 
     function loop(){
       var stepDur = _this.opt.zoomDuration + 1000;

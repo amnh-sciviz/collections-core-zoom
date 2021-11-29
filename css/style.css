@@ -2,6 +2,7 @@ body {
   background: black;
   overflow: hidden;
   font-family: sans-serif;
+  font-size: 18px;
 }
 .app {
   position: absolute;
@@ -31,4 +32,28 @@ circle {
     margin-top: -50vmin;
     margin-left: 0;
   }
+}
+
+.path {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  color: #aaa;
+  font-size: 1.4rem;
+  text-align: center;
+  z-index: 1000;
+}
+.path .node {
+  display: block;
+}
+.path .node::before {
+  content: '↓';
+  display: block;
+  padding: 5px 0;
+}
+.path .node:first-child::before {
+  display: none;
+}
+.path .node:last-child {
+  color: white;
 }
