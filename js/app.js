@@ -37,7 +37,7 @@ var App = (function() {
       packPadding: 12,
       auto: false
     };
-    this.opt = _.extend({}, defaults, queryParams(), config);
+    this.opt = _.extend({}, defaults, config, queryParams());
     this.init();
   }
 
