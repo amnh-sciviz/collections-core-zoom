@@ -304,6 +304,11 @@ var App = (function() {
     }
 
     function renderNodePath(node) {
+      var $prev = $pathContainer.clone();
+      $pathContainer.parent().append($prev);
+      $prev.fadeOut(_this.opt.zoomDuration, function(){
+        $(this).remove();
+      });
       var nodePath = [];
       var currentNode = node;
       do {
@@ -316,7 +321,9 @@ var App = (function() {
         return '<div class="node">'+name+'</div>';
       });
       html = html.join('');
+      $pathContainer.hide();
       $pathContainer.html(html);
+      $pathContainer.fadeIn(_this.opt.zoomDuration);
     }
 
     function zoom(event, toNode) {

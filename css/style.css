@@ -45,6 +45,7 @@ circle {
 }
 .path .node {
   display: block;
+  width: 200px;
 }
 .path .node::before {
   content: '↓';
