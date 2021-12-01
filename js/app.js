@@ -72,6 +72,13 @@ var App = (function() {
     return v.toLocaleString();
   }
 
+  function getColor(node, colorPalette, colorFunction){
+    var fillColor = "white";
+    if (colorPalette && colorPalette.length > node.depth) fillColor = colorPalette[node.depth-1];
+    else fillColor = colorFunction(node.depth);
+    return fillColor;
+  }
+
   function toIdString(text){
     text = ""+text;
     return text.replace(/[\W]+/g,"_");
@@ -143,7 +150,10 @@ var App = (function() {
     var startingDepth = 1;
     var hereColor = this.opt.hereColor;
     var $pathContainer = $('#current-path');
+    var $title = $('#title');
     var colorPalette = this.opt.colorPalette;
+
+    if (this.opt.showTitle) $el.addClass('has-title');
 
     var svg = d3.create("svg")
         .attr("viewBox", `-${width / 2} -${height / 2} ${width} ${height}`)
@@ -227,8 +237,7 @@ var App = (function() {
           var fillColor = "white";
 
           if (d.data.fillColor) fillColor = d.data.fillColor;
-          else if (d.children && !d.data.isLeaf && colorPalette) fillColor = colorPalette[d.depth-1];
-          else if (d.children && !d.data.isLeaf && colorPalette) fillColor = color(d.depth);
+          else if (d.children && !d.data.isLeaf) fillColor = getColor(d, colorPalette, color);
           return fillColor;
         })
         .attr("pointer-events", d => isNodeValid(d) ? null : "none")
@@ -305,7 +314,8 @@ var App = (function() {
     }
 
     function isLabelVisible(d){
-      return d.parent === focus || d.data.isHere || d === focus && (!d.children || d.data.isLeaf) || d.depth===1 && d === focus;
+      return d.parent === focus || d.data.isHere || d === focus && (!d.children || d.data.isLeaf)
+        // || d.depth===1 && d === focus;
     }
 
     function renderNodePath(node) {
@@ -333,6 +343,19 @@ var App = (function() {
       $pathContainer.fadeIn(_this.opt.zoomDuration);
     }
 
+    function renderTitle(node) {
+      if (!_this.opt.showTitle) return;
+
+      $title.fadeOut(_this.opt.zoomDuration/2, function(){
+        // if (node.depth === 3) return;
+        var name = node.data.pathName ? node.data.pathName : node.data.name;
+        $(this).text(name);
+        var fillColor = getColor(node, colorPalette, color);
+        $(this).css('color', fillColor);
+        $(this).fadeIn(_this.opt.zoomDuration/4);
+      });
+    }
+
     function zoom(event, toNode) {
       focus = toNode;
       var transition = svg.transition()
@@ -349,6 +372,7 @@ var App = (function() {
           .on("end", function(d) { if (!isLabelVisible(d)) this.style.display = "none"; });
       node.attr("pointer-events", d => isNodeValid(d) ? null : "none")
       renderNodePath(toNode);
+      renderTitle(toNode);
     }
 
     zoomTo([root.x, root.y, root.r * 2]);
