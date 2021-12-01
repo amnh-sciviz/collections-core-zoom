@@ -42,6 +42,10 @@ circle {
   font-size: 1.4rem;
   text-align: center;
   z-index: 1000;
+  display: none;
+}
+.path.active {
+  display: block;
 }
 .path .node {
   display: block;

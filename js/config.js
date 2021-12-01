@@ -4,6 +4,7 @@ var config = {
   auto: false, // setting this to anything other than false will automatically zoom in and out in a loop
   here: "trilobites", // set this to the mediaArray key (defined in the list below) associated with the current media array
   hereColor: "#9a3044",
+  colorPalette: ["#74d7ca", "#51b7c4", "#ffffff", "#dddddd"], // color palette starting from largest circle to the smallest circle
   mediaArrays: {
     "trilobites": {"name": "Trilobites", "parent": "Fossil Invertebrates", "image": "img/Trilobite_Layout_01.jpg"}
   },

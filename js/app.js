@@ -31,6 +31,9 @@ var App = (function() {
       el: '#app',
       here: "trilobites",
       hereColor: "#9a3044",
+      colorPalette: false,
+      showPath: false,
+      showTitle: true,
       mediaArrays: {},
       data: {},
       zoomDuration: 2000,
@@ -140,6 +143,7 @@ var App = (function() {
     var startingDepth = 1;
     var hereColor = this.opt.hereColor;
     var $pathContainer = $('#current-path');
+    var colorPalette = this.opt.colorPalette;
 
     var svg = d3.create("svg")
         .attr("viewBox", `-${width / 2} -${height / 2} ${width} ${height}`)
@@ -223,7 +227,8 @@ var App = (function() {
           var fillColor = "white";
 
           if (d.data.fillColor) fillColor = d.data.fillColor;
-          else if (d.children && !d.data.isLeaf) fillColor = color(d.depth);
+          else if (d.children && !d.data.isLeaf && colorPalette) fillColor = colorPalette[d.depth-1];
+          else if (d.children && !d.data.isLeaf && colorPalette) fillColor = color(d.depth);
           return fillColor;
         })
         .attr("pointer-events", d => isNodeValid(d) ? null : "none")
@@ -304,6 +309,8 @@ var App = (function() {
     }
 
     function renderNodePath(node) {
+      if (!_this.opt.showPath) return;
+      $pathContainer.addClass('active');
       var $prev = $pathContainer.clone();
       $pathContainer.parent().append($prev);
       $prev.fadeOut(_this.opt.zoomDuration, function(){
