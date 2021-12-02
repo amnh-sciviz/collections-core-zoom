@@ -34,16 +34,23 @@ circle {
   }
 }
 
-.app.has-title svg {
+/* .app.has-title svg {
   width: calc(100% - 60px);
   height: calc(100% - 60px);
   top: 60px;
   left: 30px;
-}
+} */
 .title {
-  font-size: 24px;
-  line-height: 60px;
+  font-size: 18px;
+  line-height: 24px;
   text-align: center;
+  color: black;
+  display: block;
+  position: absolute;
+  width: 100%;
+  z-index: 100000;
+  top: 24px;
+  left: 0;
 }
 
 .path {

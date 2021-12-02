@@ -189,22 +189,6 @@ var App = (function() {
         .attr("height", "1");
     });
 
-    var dotRadius = 2;
-    var dotMargin = 1;
-    var patternWidth = dotRadius * 2 * 2 + dotMargin * 2;
-    var dots = filterDef.append("pattern")
-                .attr("id", "dots")
-                .attr("patternUnits", "userSpaceOnUse")
-                .attr("width", ""+patternWidth)
-                .attr("height", ""+patternWidth);
-
-    dots.append("rect").attr("width", ""+patternWidth).attr("height", ""+patternWidth).attr("x", "0").attr("y", "0").attr("fill", "#548e84");
-    dots.append("circle").attr("r", ""+dotRadius).attr("cx", ""+dotRadius).attr("cy", ""+dotRadius).attr("fill", "#74d7ca");
-    dots.append("circle").attr("r", ""+dotRadius).attr("cx", ""+(dotRadius*3+dotMargin)).attr("cy", ""+dotRadius).attr("fill", "#74d7ca");
-    dots.append("circle").attr("r", ""+dotRadius).attr("cx", "0").attr("cy", ""+(dotRadius*3+dotMargin)).attr("fill", "#74d7ca");
-    dots.append("circle").attr("r", ""+dotRadius).attr("cx", ""+(dotRadius*2+dotMargin)).attr("cy", ""+(dotRadius*3+dotMargin)).attr("fill", "#74d7ca");
-    dots.append("circle").attr("r", ""+dotRadius).attr("cx", ""+patternWidth).attr("cy", ""+(dotRadius*3+dotMargin)).attr("fill", "#74d7ca");
-
     var root = d3.pack()
         .size([width, height])
         .padding(this.opt.packPadding)
@@ -314,7 +298,7 @@ var App = (function() {
     }
 
     function isLabelVisible(d){
-      return d.parent === focus || d.data.isHere || d === focus && (!d.children || d.data.isLeaf)
+      return d.parent === focus || d.data.isHere || d === focus && (!d.children || d.data.isLeaf);
         // || d.depth===1 && d === focus;
     }
 
@@ -347,11 +331,11 @@ var App = (function() {
       if (!_this.opt.showTitle) return;
 
       $title.fadeOut(_this.opt.zoomDuration/2, function(){
-        // if (node.depth === 3) return;
+        if (node.depth >= 3) return;
         var name = node.data.pathName ? node.data.pathName : node.data.name;
-        $(this).text(name);
+        $(this).html('<strong>'+name+'</strong><br />'+node.data.formattedValue);
         var fillColor = getColor(node, colorPalette, color);
-        $(this).css('color', fillColor);
+        // $(this).css('color', fillColor);
         $(this).fadeIn(_this.opt.zoomDuration/4);
       });
     }
@@ -361,7 +345,8 @@ var App = (function() {
       var transition = svg.transition()
           .duration(_this.opt.zoomDuration)
           .tween("zoom", d => {
-            const i = d3.interpolateZoom(view, [focus.x, focus.y, focus.r * 2]);
+            const i = d3.interpolateZoom.rho(0)(view, [focus.x, focus.y, focus.r * 2]);
+            // const i = d3.interpolateZoom(view, [focus.x, focus.y, focus.r * 2]);
             return t => zoomTo(i(t));
           });
       label
