@@ -38,7 +38,8 @@ var App = (function() {
       data: {},
       zoomDuration: 2000,
       packPadding: 12,
-      auto: false
+      auto: false,
+      loops: -1
     };
     this.opt = _.extend({}, defaults, config, queryParams());
     this.init();
@@ -86,9 +87,9 @@ var App = (function() {
 
   App.prototype.init = function(){
     this.loadHere();
-    console.log(this.opt.data);
+    console.log('Config data:', this.opt.data);
     var data = this.loadData(this.opt.data)
-    console.log('Loaded data', data);
+    console.log('Loaded data:', data);
     this.loadDataCircles(data);
   };
 
@@ -363,21 +364,52 @@ var App = (function() {
     zoomTo([root.x, root.y, root.r * 2]);
     zoom({}, startingNode);
 
+    var looped = 0;
+    var loops = parseInt(this.opt.loops);
     function loop(){
       var stepDur = _this.opt.zoomDuration + 1000;
       var nodes = root.descendants();
-      var n1 = _.find(nodes, function(d){ return d.data.name == 'AMNH Collections'; });
-      var n2 = _.find(nodes, function(d){ return d.data.name == 'Paleontology'; });
-      var n3 = _.find(nodes, function(d){ return d.data.name == 'Fossil Invertebrates'; });
-      var n4 = _.find(nodes, function(d){ return d.data.name == 'You are here'; });
+      var here = _.find(nodes, function(d){ return d.data.isHere === true; });
 
-      Promise.delay(function(){ zoom({}, n2); }, stepDur)
-             .delay(function(){ zoom({}, n3); }, stepDur)
-             .delay(function(){ zoom({}, n4); }, stepDur)
-             .delay(function(){ zoom({}, n3); }, stepDur)
-             .delay(function(){ zoom({}, n2); }, stepDur)
-             .delay(function(){ zoom({}, n1); }, stepDur)
-             .delay(function(){ loop(); }, stepDur)
+      var n = here;
+      var nodePath = [];
+      do {
+        nodePath.push(n);
+        if (n.parent && n.parent.depth >= 1) {
+          // also add it to the beginning
+          if (n.data.isHere !== true) {
+            nodePath.unshift(n);
+          }
+          n = n.parent;
+        }
+        else n = false;
+      } while (n !== false);
+
+      var promise = false;
+      _.each(nodePath, function(n){
+        if (promise === false) promise = Promise.delay(function(){ zoom({}, n); }, stepDur);
+        else promise = promise.delay(function(){ zoom({}, n); }, stepDur);
+      });
+
+      if (loops > 0) {
+        looped += 1;
+      }
+      if (looped < loops || loops <= 0) {
+        promise.delay(function(){ loop(); }, stepDur)
+      }
+
+      // var n1 = _.find(nodes, function(d){ return d.data.name == 'AMNH Collections'; });
+      // var n2 = _.find(nodes, function(d){ return d.data.name == 'Paleontology'; });
+      // var n3 = _.find(nodes, function(d){ return d.data.name == 'Fossil Invertebrates'; });
+      // var n4 = _.find(nodes, function(d){ return d.data.name == 'You are here'; });
+      //
+      // Promise.delay(function(){ zoom({}, n2); }, stepDur)
+      //        .delay(function(){ zoom({}, n3); }, stepDur)
+      //        .delay(function(){ zoom({}, n4); }, stepDur)
+      //        .delay(function(){ zoom({}, n3); }, stepDur)
+      //        .delay(function(){ zoom({}, n2); }, stepDur)
+      //        .delay(function(){ zoom({}, n1); }, stepDur)
+      //        .delay(function(){ loop(); }, stepDur)
     };
 
     if (this.opt.auto) {
