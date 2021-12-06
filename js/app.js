@@ -39,7 +39,8 @@ var App = (function() {
       zoomDuration: 2000,
       packPadding: 12,
       auto: false,
-      loops: -1
+      loops: -1,
+      export: false
     };
     this.opt = _.extend({}, defaults, config, queryParams());
     this.init();
@@ -60,13 +61,17 @@ var App = (function() {
     return node;
   }
 
-  function queryParams(){
-    if (location.search.length) {
-      var search = location.search.substring(1);
-      return JSON.parse('{"' + search.replace(/&/g, '","').replace(/=/g,'":"') + '"}', function(key, value) { return key===""?value:decodeURIComponent(value) });
+  function enterFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
     }
-    return {};
-  };
+  }
+
+  function exitFullscreen() {
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen();
+    }
+  }
 
   function formatNumber(v){
     if (isNaN(v)) return v;
@@ -80,6 +85,14 @@ var App = (function() {
     return fillColor;
   }
 
+  function queryParams(){
+    if (location.search.length) {
+      var search = location.search.substring(1);
+      return JSON.parse('{"' + search.replace(/&/g, '","').replace(/=/g,'":"') + '"}', function(key, value) { return key===""?value:decodeURIComponent(value) });
+    }
+    return {};
+  };
+
   function toIdString(text){
     text = ""+text;
     return text.replace(/[\W]+/g,"_");
@@ -91,7 +104,33 @@ var App = (function() {
     var data = this.loadData(this.opt.data)
     console.log('Loaded data:', data);
     this.loadDataCircles(data);
+
+    this.looped = 0;
+    this.loops = parseInt(this.opt.loops);
+
+    if (this.opt.export !== false) {
+      $('.export').addClass('active').on('click', (e) => {
+        this.exportStart();
+      });
+    }
   };
+
+  App.prototype.exportStart = function(){
+    
+  };
+
+  App.prototype.isLabelVisible = function(d){
+    var focus = this.focus;
+    return d.parent === focus || d.data.isHere || d === focus && (!d.children || d.data.isLeaf);
+      // || d.depth===1 && d === focus;
+  }
+
+  App.prototype.isNodeValid = function(d) {
+    var focus = this.focus;
+    var root = this.root;
+    var delta = Math.abs(d.depth - focus.depth);
+    return d !== root && delta === 1 && focus !== d && !d.data.isHidden;
+  }
 
   App.prototype.loadData = function(data){
 
@@ -147,11 +186,8 @@ var App = (function() {
     var $el = $(this.opt.el);
     var width = $el.width();
     var height = $el.height();
-    var view;
     var startingDepth = 1;
     var hereColor = this.opt.hereColor;
-    var $pathContainer = $('#current-path');
-    var $title = $('#title');
     var colorPalette = this.opt.colorPalette;
 
     if (this.opt.showTitle) $el.addClass('has-title');
@@ -197,17 +233,17 @@ var App = (function() {
         .sum(d => d.value)
         .sort((a, b) => b.value - a.value));
     var focus = root;
+    this.root = root;
+    this.focus = focus;
+    this.width = width;
+    this.svg = svg;
     var startingNode = _.find(root.descendants(), function(d){ return d.depth === startingDepth; }) || root;
 
     var color = d3.scaleLinear()
         .domain([0, 5])
         .range(["hsl(152,80%,80%)", "hsl(228,30%,40%)"])
         .interpolate(d3.interpolateHcl);
-
-    function isNodeValid(d) {
-      var delta = Math.abs(d.depth - focus.depth);
-      return d !== root && delta === 1 && focus !== d && !d.data.isHidden;
-    }
+    this.colorFunction = color;
 
     var node = svg.append("g")
       .selectAll("circle")
@@ -225,7 +261,7 @@ var App = (function() {
           else if (d.children && !d.data.isLeaf) fillColor = getColor(d, colorPalette, color);
           return fillColor;
         })
-        .attr("pointer-events", d => isNodeValid(d) ? null : "none")
+        .attr("pointer-events", d => this.isNodeValid(d) ? null : "none")
         .attr("id", d => d.data.name ? d.data.name.toLowerCase().replaceAll(' ', '-') : '')
         // .style("fill-opacity", d => d.data.isHidden ? 0 : 1)
         .style("fill-opacity", function(d){
@@ -244,7 +280,7 @@ var App = (function() {
           d3.select(this).attr("stroke", null);
         })
         .on("click", function(e, d){
-          isNodeValid(d) && (zoom(e, d), e.stopPropagation());
+          _this.isNodeValid(d) && (_this.zoom(e, d), e.stopPropagation());
         });
 
     var label = svg.append("g")
@@ -277,143 +313,14 @@ var App = (function() {
 
     d3.select(this.opt.el).node().appendChild(svg.node());
 
-    function zoomTo(v) {
-      var k = width / v[2];
-      view = v;
+    this.label = label;
+    this.node = node;
 
-      label.attr("transform", function(d){
-        var x = (d.x - v[0]) * k;
-        var y = (d.y - v[1]) * k - 22;
-        if (d.data.isHere) {
-          var z = Math.max(2, k);
-          y = y - z*10;
-        } else if (d.depth === 1) y = y - v[1] + k*40;
-        return `translate(${x},${y})`;
-      });
-      node.attr("transform", function(d){
-        var x = (d.x - v[0]) * k;
-        var y = (d.y - v[1]) * k;
-        return `translate(${x},${y})`;
-      });
-      node.attr("r", d => d.r * k);
-    }
-
-    function isLabelVisible(d){
-      return d.parent === focus || d.data.isHere || d === focus && (!d.children || d.data.isLeaf);
-        // || d.depth===1 && d === focus;
-    }
-
-    function renderNodePath(node) {
-      if (!_this.opt.showPath) return;
-      $pathContainer.addClass('active');
-      var $prev = $pathContainer.clone();
-      $pathContainer.parent().append($prev);
-      $prev.fadeOut(_this.opt.zoomDuration, function(){
-        $(this).remove();
-      });
-      var nodePath = [];
-      var currentNode = node;
-      do {
-        var name = currentNode.data.pathName ? currentNode.data.pathName : currentNode.data.name;
-        nodePath.unshift(name);
-        if (currentNode.parent) currentNode = currentNode.parent;
-      } while(currentNode.parent);
-
-      var html = _.map(nodePath, function(name){
-        return '<div class="node">'+name+'</div>';
-      });
-      html = html.join('');
-      $pathContainer.hide();
-      $pathContainer.html(html);
-      $pathContainer.fadeIn(_this.opt.zoomDuration);
-    }
-
-    function renderTitle(node) {
-      if (!_this.opt.showTitle) return;
-
-      $title.fadeOut(_this.opt.zoomDuration/2, function(){
-        if (node.depth >= 3) return;
-        var name = node.data.pathName ? node.data.pathName : node.data.name;
-        $(this).html('<strong>'+name+'</strong><br />'+node.data.formattedValue);
-        var fillColor = getColor(node, colorPalette, color);
-        // $(this).css('color', fillColor);
-        $(this).fadeIn(_this.opt.zoomDuration/4);
-      });
-    }
-
-    function zoom(event, toNode) {
-      focus = toNode;
-      var transition = svg.transition()
-          .duration(_this.opt.zoomDuration)
-          .tween("zoom", d => {
-            const i = d3.interpolateZoom.rho(0)(view, [focus.x, focus.y, focus.r * 2]);
-            // const i = d3.interpolateZoom(view, [focus.x, focus.y, focus.r * 2]);
-            return t => zoomTo(i(t));
-          });
-      label
-        .filter(function(d) { return isLabelVisible(d) || this.style.display === "inline"; })
-        .transition(transition)
-          .style("fill-opacity", d => isLabelVisible(d) ? 1 : 0)
-          .on("start", function(d) { if (isLabelVisible(d)) this.style.display = "inline"; })
-          .on("end", function(d) { if (!isLabelVisible(d)) this.style.display = "none"; });
-      node.attr("pointer-events", d => isNodeValid(d) ? null : "none")
-      renderNodePath(toNode);
-      renderTitle(toNode);
-    }
-
-    zoomTo([root.x, root.y, root.r * 2]);
-    zoom({}, startingNode);
-
-    var looped = 0;
-    var loops = parseInt(this.opt.loops);
-    function loop(){
-      var stepDur = _this.opt.zoomDuration + 1000;
-      var nodes = root.descendants();
-      var here = _.find(nodes, function(d){ return d.data.isHere === true; });
-
-      var n = here;
-      var nodePath = [];
-      do {
-        nodePath.push(n);
-        if (n.parent && n.parent.depth >= 1) {
-          // also add it to the beginning
-          if (n.data.isHere !== true) {
-            nodePath.unshift(n);
-          }
-          n = n.parent;
-        }
-        else n = false;
-      } while (n !== false);
-
-      var promise = false;
-      _.each(nodePath, function(n){
-        if (promise === false) promise = Promise.delay(function(){ zoom({}, n); }, stepDur);
-        else promise = promise.delay(function(){ zoom({}, n); }, stepDur);
-      });
-
-      if (loops > 0) {
-        looped += 1;
-      }
-      if (looped < loops || loops <= 0) {
-        promise.delay(function(){ loop(); }, stepDur)
-      }
-
-      // var n1 = _.find(nodes, function(d){ return d.data.name == 'AMNH Collections'; });
-      // var n2 = _.find(nodes, function(d){ return d.data.name == 'Paleontology'; });
-      // var n3 = _.find(nodes, function(d){ return d.data.name == 'Fossil Invertebrates'; });
-      // var n4 = _.find(nodes, function(d){ return d.data.name == 'You are here'; });
-      //
-      // Promise.delay(function(){ zoom({}, n2); }, stepDur)
-      //        .delay(function(){ zoom({}, n3); }, stepDur)
-      //        .delay(function(){ zoom({}, n4); }, stepDur)
-      //        .delay(function(){ zoom({}, n3); }, stepDur)
-      //        .delay(function(){ zoom({}, n2); }, stepDur)
-      //        .delay(function(){ zoom({}, n1); }, stepDur)
-      //        .delay(function(){ loop(); }, stepDur)
-    };
+    this.zoomTo([root.x, root.y, root.r * 2]);
+    this.zoom({}, startingNode);
 
     if (this.opt.auto) {
-      loop();
+      this.loop();
     }
 
   };
@@ -449,6 +356,151 @@ var App = (function() {
     this.here = mediaArray;
     this.opt.data = data;
   };
+
+  App.prototype.loop = function(){
+    var _this = this;
+    var stepDur = this.opt.zoomDuration + 1000;
+    var root = this.root;
+    var nodes = root.descendants();
+    var here = _.find(nodes, function(d){ return d.data.isHere === true; });
+
+    var n = here;
+    var nodePath = [];
+    do {
+      nodePath.push(n);
+      if (n.parent && n.parent.depth >= 1) {
+        // also add it to the beginning
+        if (n.data.isHere !== true) {
+          nodePath.unshift(n);
+        }
+        n = n.parent;
+      }
+      else n = false;
+    } while (n !== false);
+
+    var promise = false;
+    _.each(nodePath, function(n){
+      if (promise === false) promise = Promise.delay(function(){ _this.zoom({}, n); }, stepDur);
+      else promise = promise.delay(function(){ _this.zoom({}, n); }, stepDur);
+    });
+
+    var loops = this.loops;
+    if (loops > 0) {
+      this.looped += 1;
+    }
+    if (this.looped < loops || loops <= 0) {
+      promise.delay(function(){ _this.loop(); }, stepDur)
+    }
+
+    // var n1 = _.find(nodes, function(d){ return d.data.name == 'AMNH Collections'; });
+    // var n2 = _.find(nodes, function(d){ return d.data.name == 'Paleontology'; });
+    // var n3 = _.find(nodes, function(d){ return d.data.name == 'Fossil Invertebrates'; });
+    // var n4 = _.find(nodes, function(d){ return d.data.name == 'You are here'; });
+    //
+    // Promise.delay(function(){ zoom({}, n2); }, stepDur)
+    //        .delay(function(){ zoom({}, n3); }, stepDur)
+    //        .delay(function(){ zoom({}, n4); }, stepDur)
+    //        .delay(function(){ zoom({}, n3); }, stepDur)
+    //        .delay(function(){ zoom({}, n2); }, stepDur)
+    //        .delay(function(){ zoom({}, n1); }, stepDur)
+    //        .delay(function(){ loop(); }, stepDur)
+  };
+
+  App.prototype.renderNodePath = function(node) {
+    if (!this.opt.showPath) return;
+
+    var $pathContainer = $('#current-path');
+    $pathContainer.addClass('active');
+    var $prev = $pathContainer.clone();
+    $pathContainer.parent().append($prev);
+    $prev.fadeOut(this.opt.zoomDuration, function(){
+      $(this).remove();
+    });
+    var nodePath = [];
+    var currentNode = node;
+    do {
+      var name = currentNode.data.pathName ? currentNode.data.pathName : currentNode.data.name;
+      nodePath.unshift(name);
+      if (currentNode.parent) currentNode = currentNode.parent;
+    } while(currentNode.parent);
+
+    var html = _.map(nodePath, function(name){
+      return '<div class="node">'+name+'</div>';
+    });
+    html = html.join('');
+    $pathContainer.hide();
+    $pathContainer.html(html);
+    $pathContainer.fadeIn(this.opt.zoomDuration);
+  };
+
+  App.prototype.renderTitle = function(node) {
+    if (!this.opt.showTitle) return;
+
+    var _this = this;
+    var $title = $('#title');
+    var colorPalette = this.opt.colorPalette;
+    var color = this.colorFunction;
+
+    $title.fadeOut(this.opt.zoomDuration/2, function(){
+      if (node.depth >= 3) return;
+      var name = node.data.pathName ? node.data.pathName : node.data.name;
+      $(this).html('<strong>'+name+'</strong><br />'+node.data.formattedValue);
+      var fillColor = getColor(node, colorPalette, color);
+      // $(this).css('color', fillColor);
+      $(this).fadeIn(_this.opt.zoomDuration/4);
+    });
+  };
+
+  App.prototype.zoom = function(event, toNode) {
+    var _this = this;
+    this.focus = toNode;
+    var focus = this.focus;
+    var view = this.view;
+    var svg = this.svg;
+    var label = this.label;
+    var node = this.node;
+    var transition = svg.transition()
+        .duration(this.opt.zoomDuration)
+        .tween("zoom", d => {
+          // const i = d3.interpolateZoom.rho(0)(view, [focus.x, focus.y, focus.r * 2]);
+          const i = d3.interpolateZoom(view, [focus.x, focus.y, focus.r * 2]);
+          return t => _this.zoomTo(i(t));
+        });
+    label
+      .filter(function(d) { return _this.isLabelVisible(d) || this.style.display === "inline"; })
+      .transition(transition)
+        .style("fill-opacity", d => this.isLabelVisible(d) ? 1 : 0)
+        .on("start", function(d) { if (_this.isLabelVisible(d)) this.style.display = "inline"; })
+        .on("end", function(d) { if (!_this.isLabelVisible(d)) this.style.display = "none"; });
+    node.attr("pointer-events", d => this.isNodeValid(d) ? null : "none")
+    this.renderNodePath(toNode);
+    this.renderTitle(toNode);
+  };
+
+  App.prototype.zoomTo = function(v) {
+    var width = this.width;
+    var k = width / v[2];
+    var label = this.label;
+    var node = this.node;
+
+    this.view = v;
+
+    label.attr("transform", function(d){
+      var x = (d.x - v[0]) * k;
+      var y = (d.y - v[1]) * k - 22;
+      if (d.data.isHere) {
+        var z = Math.max(2, k);
+        y = y - z*10;
+      } else if (d.depth === 1) y = y - v[1] + k*40;
+      return `translate(${x},${y})`;
+    });
+    node.attr("transform", function(d){
+      var x = (d.x - v[0]) * k;
+      var y = (d.y - v[1]) * k;
+      return `translate(${x},${y})`;
+    });
+    node.attr("r", d => d.r * k);
+  }
 
   return App;
 
