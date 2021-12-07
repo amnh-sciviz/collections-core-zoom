@@ -1,5 +1,6 @@
 var config = {
-  zoomDuration: 2000, // duration of zoom in/out in milliseconds
+  zoomDuration: 3000, // duration of zoom in/out in milliseconds
+  restDuration: 2000, // duration to rest between zooming when in "auto" mode
   packPadding: 12, // padding between circles
   auto: false, // setting this to anything other than false will automatically zoom in and out in a loop
   here: "trilobites", // set this to the mediaArray key (defined in the list below) associated with the current media array

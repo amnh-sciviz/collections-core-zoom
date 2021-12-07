@@ -24,6 +24,108 @@ Promise.prototype.delay = function (fn, t) {
 
 }
 
+function addStreamStopListener(stream, callback) {
+    stream.addEventListener('ended', function() {
+        callback();
+        callback = function() {};
+    }, false);
+    stream.addEventListener('inactive', function() {
+        callback();
+        callback = function() {};
+    }, false);
+    stream.getTracks().forEach(function(track) {
+        track.addEventListener('ended', function() {
+            callback();
+            callback = function() {};
+        }, false);
+        track.addEventListener('inactive', function() {
+            callback();
+            callback = function() {};
+        }, false);
+    });
+}
+
+function invokeGetDisplayMedia(success, error) {
+  var displaymediastreamconstraints = {
+      video: {
+        displaySurface: 'application', // monitor, window, application, browser
+        logicalSurface: true,
+        cursor: 'never' // never, always, motion
+      }
+  };
+
+  // above constraints are NOT supported YET
+  // that's why overriding them
+  displaymediastreamconstraints = {
+      video: true
+  };
+
+  if(navigator.mediaDevices.getDisplayMedia) {
+      navigator.mediaDevices.getDisplayMedia(displaymediastreamconstraints).then(success).catch(error);
+  } else {
+      navigator.getDisplayMedia(displaymediastreamconstraints).then(success).catch(error);
+  }
+}
+
+function invokeSaveAsDialog(file, fileName) {
+    if (!file) {
+        throw 'Blob object is required.';
+    }
+
+    if (!file.type) {
+        try {
+            file.type = 'video/webm';
+        } catch (e) {}
+    }
+
+    var fileExtension = (file.type || 'video/webm').split('/')[1];
+
+    if (fileName && fileName.indexOf('.') !== -1) {
+        var splitted = fileName.split('.');
+        fileName = splitted[0];
+        fileExtension = splitted[1];
+    }
+
+    var fileFullName = (fileName || (Math.round(Math.random() * 9999999999) + 888888888)) + '.' + fileExtension;
+
+    if (typeof navigator.msSaveOrOpenBlob !== 'undefined') {
+        return navigator.msSaveOrOpenBlob(file, fileFullName);
+    } else if (typeof navigator.msSaveBlob !== 'undefined') {
+        return navigator.msSaveBlob(file, fileFullName);
+    }
+
+    var hyperlink = document.createElement('a');
+    hyperlink.href = URL.createObjectURL(file);
+    hyperlink.download = fileFullName;
+
+    hyperlink.style = 'display:none;opacity:0;color:transparent;';
+    (document.body || document.documentElement).appendChild(hyperlink);
+
+    if (typeof hyperlink.click === 'function') {
+        hyperlink.click();
+    } else {
+        hyperlink.target = '_blank';
+        hyperlink.dispatchEvent(new MouseEvent('click', {
+            view: window,
+            bubbles: true,
+            cancelable: true
+        }));
+    }
+
+    URL.revokeObjectURL(hyperlink.href);
+}
+
+// https://github.com/muaz-khan/RecordRTC/blob/master/simple-demos/screen-recording.html
+function captureScreen(callback) {
+    invokeGetDisplayMedia(function(screen) {
+        addStreamStopListener(screen, function() {});
+        callback(screen);
+    }, function(error) {
+        console.error(error);
+        alert('Unable to capture your screen. Please check console logs.\n' + error);
+    });
+}
+
 var App = (function() {
 
   function App(config) {
@@ -61,9 +163,9 @@ var App = (function() {
     return node;
   }
 
-  function enterFullscreen() {
+  function enterFullscreen(element) {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
+      element.requestFullscreen();
     }
   }
 
@@ -99,24 +201,54 @@ var App = (function() {
   }
 
   App.prototype.init = function(){
-    this.loadHere();
-    console.log('Config data:', this.opt.data);
-    var data = this.loadData(this.opt.data)
-    console.log('Loaded data:', data);
-    this.loadDataCircles(data);
-
     this.looped = 0;
     this.loops = parseInt(this.opt.loops);
+    this.$el = $(this.opt.el);
+    this.el = this.$el[0];
 
-    if (this.opt.export !== false) {
-      $('.export').addClass('active').on('click', (e) => {
-        this.exportStart();
-      });
-    }
+    this.loadHere();
+    console.log('Config data:', this.opt.data);
+    var data = this.loadData(this.opt.data);
+    this.loadedData = data;
+    console.log('Loaded data:', data);
+    this.loadDataCircles(data);
+    this.loadListeners();
+  };
+
+  App.prototype.export = function(){
+    if (!this.recorder || !this.recording) return;
+
+    var _this = this;
+    this.recording = false;
+    this.recorder.stopRecording(function() {
+      var blob = _this.recorder.getBlob();
+      exitFullscreen();
+      invokeSaveAsDialog(blob, _this.opt.here + '.webm');
+
+    });
   };
 
   App.prototype.exportStart = function(){
-    
+    var _this = this;
+    var $button = $('.export');
+
+    captureScreen(function(screen) {
+
+        _this.recorder = RecordRTC(screen, {
+            type: 'video'
+        });
+
+        enterFullscreen($('body')[0]);
+        _this.looped = 0;
+        _this.loops = 1;
+        $button.removeClass('active');
+
+        setTimeout(function(){
+          _this.recorder.startRecording();
+          _this.recording = true;
+          _this.loop();
+        }, 4000);
+    });
   };
 
   App.prototype.isLabelVisible = function(d){
@@ -357,9 +489,22 @@ var App = (function() {
     this.opt.data = data;
   };
 
+  App.prototype.loadListeners = function(){
+    if (this.opt.export !== false) {
+      $('.export').addClass('active').on('click', (e) => {
+        this.exportStart();
+      });
+    }
+
+    $(window).on('resize', (e) => {
+      setTimeout(() => this.reset(), 10);
+
+    });
+  };
+
   App.prototype.loop = function(){
     var _this = this;
-    var stepDur = this.opt.zoomDuration + 1000;
+    var stepDur = this.opt.zoomDuration + this.opt.restDuration;
     var root = this.root;
     var nodes = root.descendants();
     var here = _.find(nodes, function(d){ return d.data.isHere === true; });
@@ -389,7 +534,9 @@ var App = (function() {
       this.looped += 1;
     }
     if (this.looped < loops || loops <= 0) {
-      promise.delay(function(){ _this.loop(); }, stepDur)
+      promise.delay(function(){ _this.loop(); }, stepDur);
+    } else if (this.recording) {
+      promise.delay(function(){ _this.export(); }, stepDur + this.opt.restDuration);
     }
 
     // var n1 = _.find(nodes, function(d){ return d.data.name == 'AMNH Collections'; });
@@ -449,6 +596,13 @@ var App = (function() {
       // $(this).css('color', fillColor);
       $(this).fadeIn(_this.opt.zoomDuration/4);
     });
+  };
+
+  App.prototype.reset = function() {
+    if (!this.svg) return;
+    var $svg = $(this.svg);
+    $svg.remove();
+    this.loadDataCircles(this.loadedData);
   };
 
   App.prototype.zoom = function(event, toNode) {
